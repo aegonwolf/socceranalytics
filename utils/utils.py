@@ -11,8 +11,6 @@ from bokeh.plotting import figure
 from bokeh.models import Range1d
 from math import pi
 import imageio
-import requests
-from bs4 import BeautifulSoup
 #https://github.com/znstrider/PyFootballPitch/blob/master/Football_Pitch_Bokeh.py#L6
 
 
@@ -246,69 +244,6 @@ def save_frames(df, length, width, position_cols, output_path):
         plt.close(fig)
     #     if index % 100 == 0:
     #         plt.show()
-
-
-
-baseURL = "https://www.uefa.com/uefaeuro-2020/teams/"
-
-class Player:
-    """
-    Player Object
-    Credit: Danny Camenisch
-    """
-    def __init__(self, attr):
-        self.id             = attr[0]
-        self.name           = attr[1]
-        self.number         = attr[2]
-        self.position       = attr[3]
-        self.age            = attr[4]
-        self.gamesPlayed    = attr[5]
-        self.goals          = attr[6]
-
-def parseSite(teamID):
-    """
-    get Player Id Name mappings
-    credit Danny Camenisch
-    :param teamID: Int Id of Team
-    """
-    teamURL = baseURL + str(teamID) + "/squad/"
-
-    # Get the HTML from the site
-    page = requests.get(teamURL)
-
-    # Check for bad status code
-    if not page.status_code == 200:
-        print("Error: Could not get the page")
-        return
-
-    # Parse the HTML
-    html = page.text
-    soup = BeautifulSoup(html, 'html.parser')
-
-    # The HTML has multiple divs with class 'squad--team-wrap' that contain all
-    # the player infos split by postition
-    squad = soup.find_all('div', class_='squad--team-wrap')
-
-    # Extract the player infos from the HTML
-    players = []
-
-    for wrap in squad[1:5]:
-        postition = wrap.h5.text[:-1]
-
-        for player in wrap.find('tbody').find_all('tr'):
-            infos = player.find_all('td')
-
-            players.append(Player([
-                infos[0].find('a', class_='player-name')["href"].split("/")[-2].split("-")[0],
-                infos[0].find('a', class_='player-name')["title"],
-                infos[0].text.strip().split(" ")[-1].strip("()"),
-                postition,
-                infos[1].text.strip(),
-                infos[2].text.strip().replace("-", "0"),
-                infos[3].text.strip().replace("-", "0")
-            ]))
-
-    return players
 
 
 def create_gif(images_path, gif_path):
