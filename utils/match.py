@@ -22,7 +22,20 @@ class Match:
         self.pitchWidth   = int(match[1].attrib['pitchWidth'])
         self.phases       = [Phase(phase) for phase in match[2]]
         self.frames       = [Frame(frame) for frame in match[3]]
+
+        self.removeExcessFrames()
         
+    def removeExcessFrames(self):
+        keep = []
+        for frame in self.frames:
+            for phase in self.phases:
+                if frame.time >= phase.start and frame.time <= phase.end:
+                    keep.append(frame)
+                    break
+
+        self.frames = keep
+
+
 class Phase:
     def __init__(self, phase):
         self.start       = phase.attrib['start']
