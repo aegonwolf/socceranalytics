@@ -5,7 +5,9 @@ import pyarrow.parquet as pa
 from player import getPlayerInfos
 
 # get your input
-table = pa.read_table('/Users/igor/Downloads/italy_wales.parquet')
+# keep in mind that the script is going to work with the parquet file
+# which has the structure of the output of the code (toframe1.py) I sent on 22.03.22 on discord
+table = pa.read_table('_your_input_file_path_')
 
 # a global dictionary with entries of form: {'player.id':<distance covered>}
 # for all the players passed as list of Player objects to distTeam() function
