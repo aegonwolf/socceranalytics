@@ -9,6 +9,8 @@ Simple module to convert a xml file containing data in TRACAB format to a Match 
 # ---------------------------------------------------------------------------
 import xml.etree.ElementTree as et
 
+from utils.player import getPlayerInfos
+
 class Match:
     def __init__(self, filePath):
         match = et.parse(filePath).getroot()[0]
@@ -24,7 +26,10 @@ class Match:
         self.frames       = [Frame(frame) for frame in match[3]]
 
         self.removeExcessFrames()
-        
+    
+    def getPlayers(self, homeTeam):
+        return getPlayerInfos(self.phases[0 if homeTeam else 0].leftTeamID)
+
     def removeExcessFrames(self):
         keep = []
         for frame in self.frames:
