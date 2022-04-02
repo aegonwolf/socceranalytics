@@ -27,6 +27,7 @@ def tracking_to_parquet(path, save=False, save_path=None):
     return: pandas dataframe with tracking data
     """
     match = m.Match(path)
+    match_id = match.matchID
 
     framedict = dict()
 
@@ -34,6 +35,8 @@ def tracking_to_parquet(path, save=False, save_path=None):
         # time is stored as datetime objects - makes it easier to do operations/comparisons on it
         time = frame.time.replace('Z', '').replace('T', ' ')
         columns = dict()
+        if '.' not in time:
+            time += '.0'
         columns['time'] = datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
 
         for i, obj in enumerate(frame.trackingObjs):
@@ -51,15 +54,19 @@ def tracking_to_parquet(path, save=False, save_path=None):
                     # if key == 'id':
                     #     continue
 
-                    columns["player" + str(obj.id) + "_" + key] = int(value)
+                    columns[str(obj.id) + "_" + key] = int(value)
 
         framedict[index] = columns
 
     # convert into pandas dataframe & export as parquet file
     df = pd.DataFrame.from_dict(framedict, orient='index')
+    df.attrs['match_id'] = match_id
+    df.attrs['home_team'] = match.phases[0].leftTeamID
+    df.attrs['away_team'] = match.phases[1].leftTeamID
+    df.attrs['player_map'] = get_playermap(df.attrs['home_team'], df.attrs['away_team'])
     if save:
         df.to_parquet(save_path, index=False)
-    return df
+    return
 
 
 def create_pitch(length, width, linecolor, bounds = 15):
@@ -130,16 +137,15 @@ def create_pitch(length, width, linecolor, bounds = 15):
 
     return fig,ax
 
-#This function creates a gif like you've seen in my presentation
-def create_gif(images_path, gif_path):
-    images = []
-    filenames = sorted(glob(images_path))
-    #I know it's a double sort but this isn't A&D!!!
-    filenames.sort(key=lambda x: int(''.join(filter(str.isdigit, x))))
-    for index, filename in enumerate(filenames):
-        img = imageio.imread(filename)
-        images.append(img)
-    imageio.mimsave(gif_path, images, fps=10) # Save gif
+def get_playermap(home, away):
+    home = getPlayerInfos(home)
+    away = getPlayerInfos(away)
+    player_map = dict()
+    for player in home:
+        player_map[player.id] = player.name
+    for player in away:
+        player_map[player.id] = player.name
+    return player_map
 
 
 
