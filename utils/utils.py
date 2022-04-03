@@ -1,4 +1,3 @@
-import xml.etree.ElementTree as ET  # parsing XML files
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Arc
@@ -11,26 +10,12 @@ from bokeh.plotting import figure
 from bokeh.models import Range1d
 from math import pi
 import imageio
+import match as m
+from datetime import datetime
 #https://github.com/znstrider/PyFootballPitch/blob/master/Football_Pitch_Bokeh.py#L6
 
 
-class Match:
-    """
-    Creates a super useful match Object from the tracking data
-    Credit Danny
-    """
-    def __init__(self, match):
-        self.matchID = int(match.attrib['id'])
-        self.matchNr = int(match.attrib['matchNumber'])
-        self.date = match.attrib['dateMatch']
-        self.stadiumID = int(match[1].attrib['id'])
-        self.stadiumName = match[1].attrib['name']
-        self.pitchLength = int(match[1].attrib['pitchLength'])
-        self.pitchWidth = int(match[1].attrib['pitchWidth'])
-        self.phases = match[2]
-        self.frames = match[3]
-
-def tracking_to_parquet(path, save = False, save_path = None):
+def tracking_to_parquet(path, save=False, save_path=None):
     """
     credit Bojan
     converts tracking data to pandas dataframe
@@ -39,35 +24,51 @@ def tracking_to_parquet(path, save = False, save_path = None):
     params path: str, path to xml tracking file
     params save: Bool: whether or not to save
     params savepath: str path to save dataframe
+    return: pandas dataframe with tracking data
     """
-    tree = ET.parse(path).getroot()
-    match = Match(tree[0])
+    match = m.Match(path)
+    match_id = match.matchID
 
     framedict = dict()
 
-    players_ids = dict()  # dictionary for storing unique mappings from player's id to {1,...,(22 + #subs during the match)}
     for index, frame in enumerate(match.frames):
-        time = frame.attrib["utc"]
-
+        # time is stored as datetime objects - makes it easier to do operations/comparisons on it
+        time = frame.time.replace('Z', '').replace('T', ' ')
         columns = dict()
+        if '.' not in time:
+            time += '.0'
+        columns['time'] = datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
 
-        for i, obj in enumerate(frame[0]):
-            columns['time'] = time
-            if obj.attrib['type'] == '7':
-                for key, value in obj.attrib.items():
-                    columns["ball_" + key] = value
+        for i, obj in enumerate(frame.trackingObjs):
+            if obj.type == '7':
+                for key, value in obj.__dict__.items():
+                    columns["ball_" + key] = int(value)
             else:
-                if not obj.attrib['id'] in players_ids:
-                    players_ids[obj.attrib['id']] = len(players_ids) + 1
+                # Each player with id Q, who played during the match gets their own columns:
+                # "playerQ_type", "playerQ_id"*, "playerQ_x", "playerQ_y" with the respective data.
+                # In case the player got subbed on/off at some point, the entries corresponding to
+                # the time the player was off the pitch have value <null>
+                for key, value in obj.__dict__.items():
+                    #  *since we encode players' IDs in the columns' names, you might  want to avoid
+                    #   some data redundancy and skip the ID columns, depending on the application
+                    # if key == 'id':
+                    #     continue
 
-                for key, value in obj.attrib.items():
-                    columns["player" + str(players_ids[obj.attrib['id']]) + "_" + key] = value
+                    columns[str(obj.id) + "_" + key] = int(value)
 
         framedict[index] = columns
 
+    # convert into pandas dataframe & export as parquet file
     df = pd.DataFrame.from_dict(framedict, orient='index')
-    df.to_parquet(save_path, index=False)
-#%%
+    df.attrs['match_id'] = match_id
+    df.attrs['home_team'] = match.phases[0].leftTeamID
+    df.attrs['away_team'] = match.phases[1].leftTeamID
+    df.attrs['player_map'] = get_playermap(df.attrs['home_team'], df.attrs['away_team'])
+    if save:
+        df.to_parquet(save_path, index=False)
+    return
+
+
 def create_pitch(length, width, linecolor, bounds = 15):
 
     """
@@ -136,16 +137,15 @@ def create_pitch(length, width, linecolor, bounds = 15):
 
     return fig,ax
 
-#This function creates a gif like you've seen in my presentation
-def create_gif(images_path, gif_path):
-    images = []
-    filenames = sorted(glob(images_path))
-    #I know it's a double sort but this isn't A&D!!!
-    filenames.sort(key=lambda x: int(''.join(filter(str.isdigit, x))))
-    for index, filename in enumerate(filenames):
-        img = imageio.imread(filename)
-        images.append(img)
-    imageio.mimsave(gif_path, images, fps=10) # Save gif
+def get_playermap(home, away):
+    home = getPlayerInfos(home)
+    away = getPlayerInfos(away)
+    player_map = dict()
+    for player in home:
+        player_map[player.id] = player.name
+    for player in away:
+        player_map[player.id] = player.name
+    return player_map
 
 
 

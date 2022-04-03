@@ -3,11 +3,14 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pa
 from player import getPlayerInfos
+import utils
 
 # get your input
-# keep in mind that the script is going to work with the parquet file
-# which has the structure of the output of the code (toframe1.py) I sent on 22.03.22 on discord
-table = pa.read_table('_your_input_file_path_')
+# works with the tracking_to_parquet function from utils - in case you don't have
+# the parquet file yet, uncomment the line below
+
+# utils.tracking_to_parquet('<your_xml_file_path>', True, 'test.parquet')
+table = pa.read_table('test.parquet')
 
 # a global dictionary with entries of form: {'player.id':<distance covered>}
 # for all the players passed as list of Player objects to distTeam() function
@@ -40,6 +43,7 @@ def distPlayer(id):
     :param id: id of a player, given by UEFA
     :return: if  player didn't play
     """
+
     if ('player' + str(id) + '_x') not in table.column_names:
         return 'didn\'t play'
 
@@ -75,12 +79,12 @@ def distPlayer(id):
     # "distance covered" between the last sampling of the 1st half and first sampling of the 2nd half
     # (i.e. delta_t must be within 3 minutes [can be adapted in case of overtimes etc.])     -- 1st&2nd conditions
     # as well as some anomalies, such as running faster than Usain Bolt (>12.3m/s)           -- 3rd condition
-    # or ultra slow walking (<0.333m/s)                                                      -- 4th condition
+    # or ultra slow walking (<0.123/s)                                                      -- 4th condition
     # [such entries are treated as errors and are ignored]
     df2 = pd.concat([dist_delta, t_delta.rename(columns={'time': 'delta_t'})], axis=1)
     distance = df2.loc[(0 < df2['delta_t']) & (df2['delta_t'] < 180)
                        & (df2['dist'] / (100 * df2['delta_t']) < 12.3)
-                       & (df2['dist'] / (100 * df2['delta_t']) > 0.333), 'dist'].sum()
+                       & (df2['dist'] / (100 * df2['delta_t']) > 0.123), 'dist'].sum()
 
     plrs[id] = round(distance / 100000, 3)
     return distance
