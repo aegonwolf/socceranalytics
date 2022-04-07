@@ -371,4 +371,4 @@ def get_all_matchdfs(match_ids, data_path):
     match_dfs = []
     for key, df in dfs.items():
         match_dfs.append(df)
-    return pd.concat(italy_match_dfs), dfs
+    return pd.concat(match_dfs), dfs
