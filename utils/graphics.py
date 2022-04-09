@@ -11,7 +11,7 @@ from matplotlib import pyplot as plt
 from matplotlib.patches import Arc
 from matplotlib.axes import Axes
 
-from socceranalytics.utils.match import Frame
+from utils.match import Frame
 
 def drawFrame(ax: Axes, frame: Frame):
     """Draw a the positions from a frame on a given axes.
