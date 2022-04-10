@@ -262,3 +262,113 @@ def create_gif(images_path, gif_path):
         img = imageio.imread(filename)
         images.append(img)
     imageio.mimsave(gif_path, images, fps=10) # Save gif
+
+def tracking_df(path, save=False, save_path=None):
+    """
+    credit Bojan
+    converts tracking data to pandas dataframe
+    saves in parquet if save == True
+    saves to current directory
+    params path: str, path to xml tracking file
+    params save: Bool: whether or not to save
+    params savepath: str path to save dataframe
+    return: pandas dataframe with tracking data
+    """
+    match = m.Match(path)
+    match_id = match.matchID
+
+    framedict = dict()
+
+    for index, frame in enumerate(match.frames):
+        # time is stored as datetime objects - makes it easier to do operations/comparisons on it
+        time = frame.time.replace('Z', '').replace('T', ' ')
+        columns = dict()
+        if '.' not in time:
+            time += '.0'
+        columns['time'] = datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
+
+        for i, obj in enumerate(frame.trackingObjs):
+            if obj.type == '7':
+                for key, value in obj.__dict__.items():
+                    columns["ball_" + key] = int(value)
+            else:
+                # Each player with id Q, who played during the match gets their own columns:
+                # "playerQ_type", "playerQ_id"*, "playerQ_x", "playerQ_y" with the respective data.
+                # In case the player got subbed on/off at some point, the entries corresponding to
+                # the time the player was off the pitch have value <null>
+                for key, value in obj.__dict__.items():
+                    #  *since we encode players' IDs in the columns' names, you might  want to avoid
+                    #   some data redundancy and skip the ID columns, depending on the application
+                    # if key == 'id':
+                    #     continue
+
+                    columns[str(obj.id) + "_" + key] = int(value)
+
+        framedict[index] = columns
+
+    # convert into pandas dataframe & export as parquet file
+    df = pd.DataFrame.from_dict(framedict, orient='index')
+    df.attrs['match_id'] = match_id
+    df.attrs['home_team'] = match.phases[0].leftTeamID
+    df.attrs['away_team'] = match.phases[1].leftTeamID
+    df.attrs['player_map'] = get_playermap(df.attrs['home_team'], df.attrs['away_team'])
+    if save:
+        with pd.HDFStore(save_path) as store:
+            store.put('df', df)
+            store.get_storer('df').attrs.my_attribute = df.attrs
+    return
+
+#%%
+
+def restore_df(path):
+    with pd.HDFStore(path) as store:
+        df = store.get('df')
+        df.attrs = store.get_storer('df').attrs.my_attribute
+        return df
+
+data_path = '../input/socceranalytics/events/events/'
+team = 'Italy'
+json_matches_path = '../input/socceranalytics/matches.json'
+
+def all_matches(team, data_path):
+    match_ids = get_all_matchids(team)
+    all_team_df, dfs = get_all_matchdfs(match_ids, data_path)
+    return all_team_df, dfs
+
+def get_all_matchids(team):
+    '''
+    given a team name i.e. "Italy", returns a list of all match_ids by italy
+    '''
+    with open(json_matches_path) as f:
+        data = json.load(f)
+        matches = pd.json_normalize(data, sep = "_")
+    #get mask for team
+    mask = (matches["home_team_home_team_name"] == team) | (matches["away_team_away_team_name"] == team)
+    team_matches = matches[mask]
+    match_ids = []
+    for match in team_matches.match_id:
+        match_ids.append(match)
+    return match_ids
+
+def get_all_matchdfs(match_ids, data_path):
+    '''
+    takes a list of matches and a datapath to all match_data and returns
+    a concatenated dataframe + a dictionary of dataframes
+    with all dataframes for those match_ids
+    param: match_ids, list of strings match_ids
+    param: data_path, string, path to json files
+    '''
+    dfs = dict()
+    for match_id in match_ids:
+        zipfile = bz2.BZ2File(data_path + f"{match_id}.json.bz2")
+        file = zipfile.read()
+        open(f"{match_id}.json", 'wb').write(file)
+        with open(f"{match_id}.json") as f:
+            events = json.load(f)
+            df = pd.json_normalize(events[2:], sep = "_")
+            df['match_id'] = match_id
+            dfs[match_id] = df
+    match_dfs = []
+    for key, df in dfs.items():
+        match_dfs.append(df)
+    return pd.concat(match_dfs), dfs
