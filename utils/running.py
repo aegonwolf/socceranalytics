@@ -8,24 +8,34 @@ import scipy.signal as signal
 start_time = pd.Timestamp('1970-01-01 02:00:00')
 
 # a global dictionary with entries of form: {'player.id':<distance covered>}
-# for all the players passed as list of Player objects to distTeam() function
+# for all the players passed as list of ids to distTeam()/distPlayer() functions
 plrs = mp.Manager().dict()
 
+# global variables used across the file
 global table, normalized, start, stop
 normalized = False
 start = 0
 stop = 150
 
 
-def distTeam(players, path, begin, end, norm=False):
+def distTeam(players, path, begin=0, end=150, norm=False):
     """
     computes distance [in km rounded to 3 decimal places] covered by every Player p whose id
     is passed in :param players by running :distPlayer(p.id) on it
     and stores it in the global plrs dictionary
 
     to speed things up, some concurrency is incorporated
-    :param players: list of IDs of the players
-    :return: None - the function updates the global dictionary plrs with entries of
+    Parameters
+    ----------
+    players: list of IDs of the players
+    path: path to the dataframe file (in .parquet format, assumes the column names match the necessary
+    format seen in distPlayer function
+    begin: minute of the match where you start considering the distances covered
+    end: minute of the match after which you don't further consider the distances covered
+    default values of begin and end result in considering the whole game
+    Returns
+    -------
+    None - the function updates the global dictionary plrs with entries of
     form {'p.id':<distance_covered_by_player_p>}
     """
     if begin >= end:
@@ -40,6 +50,7 @@ def distTeam(players, path, begin, end, norm=False):
     with mp.Pool(mp.cpu_count()) as pool:
         pool.map(distPlayer, players)
 
+    # reset the global parameters to the default values
     normalized = False
     start = 0
     stop = 150
@@ -52,19 +63,25 @@ def distPlayer(id):
 
     does some basic filtering of errors/weird results
 
-    :param id: id of a player, given by UEFA
-    :return: if  player didn't play
+    Parameters
+    ----------
+    id: id of a player, given by UEFA
+    Returns
+    -------
+    distance covered by the player (in km). Based on the values of global parameters,
+    the result is taken within a certain time window and could also be normalized (over 90min)
+    the result is stored in plrs dictionary
     """
 
     if (str(id) + '_x') not in table.column_names:
         return 0
 
-    # pick the columns of the player & use only reliable samplings
+    # pick the columns of the player & drop unreliable samplings
     df = table.select(['time', str(id) + '_x', str(id) + '_y',
                        str(id) + '_sampling', str(id) + '_type']).to_pandas()
-    # df = df.loc[(df[str(id) + '_sampling'] == 1)]
     df = df.loc[(df[str(id) + '_sampling'] != 2)]
 
+    # prepare the df for computations
     dist_delta = pd.DataFrame({'dx': df[str(id) + '_x'].diff(),
                                'dy': df[str(id) + '_y'].diff(),
                                'dt': df['time'].diff().map(lambda x: x.total_seconds()),
@@ -104,7 +121,7 @@ def distPlayer(id):
                                 & (np.sqrt(dist_delta['vx'] ** 2 + dist_delta['vy'] ** 2) > 0.05)]
 
     # smooth out the results - if the results are not satisfying, one can play around with the
-    # sizes of the moving windows
+    # sizes of the moving windows of the filters
     #
     # distances smoothed using rolling median (moving time window of size 2.8s)
     # velocities smoothed using Savitzky-Golay filter (of linear order, window of size 25 entries ~ 1s)

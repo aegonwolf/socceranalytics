@@ -1,5 +1,6 @@
 import glob
-from run_smooth import *
+from player import *
+from running import *
 
 
 def dists_team(team, players, norm=False, start=0, end=150, save=False, path=None):
