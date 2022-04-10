@@ -1,23 +1,23 @@
+from datetime import datetime
 import multiprocess as mp
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pa
-from player import getPlayerInfos
-import utils
+import scipy.signal as signal
 
-# get your input
-# works with the tracking_to_parquet function from utils - in case you don't have
-# the parquet file yet, uncomment the line below
-
-# utils.tracking_to_parquet('<your_xml_file_path>', True, 'test.parquet')
-table = pa.read_table('test.parquet')
+start_time = pd.Timestamp('1970-01-01 02:00:00')
 
 # a global dictionary with entries of form: {'player.id':<distance covered>}
 # for all the players passed as list of Player objects to distTeam() function
 plrs = mp.Manager().dict()
 
+global table, normalized, start, stop
+normalized = False
+start = 0
+stop = 150
 
-def distTeam(players):
+
+def distTeam(players, path, begin, end, norm=False):
     """
     computes distance [in km rounded to 3 decimal places] covered by every Player p whose id
     is passed in :param players by running :distPlayer(p.id) on it
@@ -28,9 +28,21 @@ def distTeam(players):
     :return: None - the function updates the global dictionary plrs with entries of
     form {'p.id':<distance_covered_by_player_p>}
     """
+    if begin >= end:
+        return
+    global table, normalized, start, stop
+    table = pa.read_table(path)
+    start = begin
+    stop = end
+    if norm:
+        normalized = True
     plrs.clear()  # clear plrs, so that only data of players from one list is kept there at a time
     with mp.Pool(mp.cpu_count()) as pool:
         pool.map(distPlayer, players)
+
+    normalized = False
+    start = 0
+    stop = 150
 
 
 def distPlayer(id):
@@ -44,92 +56,81 @@ def distPlayer(id):
     :return: if  player didn't play
     """
 
-    if ('player' + str(id) + '_x') not in table.column_names:
-        return 'didn\'t play'
+    if (str(id) + '_x') not in table.column_names:
+        return 0
 
     # pick the columns of the player & use only reliable samplings
-    df = table.select(['time', 'player' + str(id) + '_x', 'player' + str(id) + '_y',
-                       'player' + str(id) + '_sampling']).to_pandas()
-    df = df.loc[(df['player' + str(id) + '_sampling'] == 1)]
+    df = table.select(['time', str(id) + '_x', str(id) + '_y',
+                       str(id) + '_sampling', str(id) + '_type']).to_pandas()
+    # df = df.loc[(df[str(id) + '_sampling'] == 1)]
+    df = df.loc[(df[str(id) + '_sampling'] != 2)]
 
-    # we shift the 'coordinate vectors' by duplicating first resp. last row,
-    # so that we can efficiently compute the differences in distances later
-    df_padded_first = pd.concat([df.head(1), df]).reset_index(drop=True)  # [(x1,y1),(x1,y1),(x2,y2),...,(xn, yn)]
-    df_padded_last = pd.concat([df, df.tail(1)]).reset_index(drop=True)  # [(x1,y1),(x2,y2),...,(xn, yn),(xn, yn)]
+    dist_delta = pd.DataFrame({'dx': df[str(id) + '_x'].diff(),
+                               'dy': df[str(id) + '_y'].diff(),
+                               'dt': df['time'].diff().map(lambda x: x.total_seconds()),
+                               'time': df['time']})
 
-    # dataframe which contains time differences between the adjacent samplings
-    # converted into floats [unit: seconds], so that we can compare/filter them easily
-    t_delta = pd.DataFrame(df_padded_last['time'] - df_padded_first['time'])
-    t_delta['time'] = t_delta['time'].map(lambda x: x.total_seconds())
+    # set the time window according to global parameters start and stop
+    scnd_half_start = df['time'].loc[df['time'].diff().map(lambda x: x.total_seconds()) > 14 * 60]
+    last_fst_half = df['time'].loc[df['time'] < scnd_half_start.iloc[0]].iloc[-1]
+    break_time = (scnd_half_start - last_fst_half).iloc[0].total_seconds() / 60
+    first_half_dur = (last_fst_half - dist_delta['time'].iloc[0]).total_seconds() / 60
+    second_half_dur = dist_delta['time'].iloc[-1] - scnd_half_start
+    global start, stop
+    if start > first_half_dur:
+        start += break_time
+    if stop > first_half_dur:
+        stop += break_time
 
-    # create dataframe dist_delta containing the distances covered between
-    # the samplings.
-    # each entry is of form: sqrt((x_{i+1} - x_{i})^2 + (y_{i+1} - y_{i})^2)
-    x_delta = pd.DataFrame()
-    x_delta['dist'] = ((df_padded_last['player' + str(id) + '_x'] -
-                       df_padded_first['player' + str(id) + '_x']) ** 2)
+    start_match = dist_delta['time'].iloc[0] - start_time
+    end_match = dist_delta['time'].iloc[-1] - start_time
+    dist_delta = dist_delta.set_index('time')
 
-    y_delta = pd.DataFrame()
-    y_delta['dist'] = ((df_padded_last['player' + str(id) + '_y'] -
-                       df_padded_first['player' + str(id) + '_y']) ** 2)
+    window_begin = max(datetime.fromtimestamp(start_match.total_seconds() + 60 * start),
+                       datetime.fromtimestamp(start_match.total_seconds()))
 
-    dist_delta = (x_delta + y_delta).applymap(np.sqrt)
+    window_end = min(datetime.fromtimestamp(start_match.total_seconds() + 60 * (stop + 1)),
+                     datetime.fromtimestamp(end_match.total_seconds()))
+    dist_delta = dist_delta.loc[((dist_delta.index - window_begin).total_seconds() / 60 >= 0)
+                                & ((window_end - dist_delta.index).total_seconds() / 60 > 0)]
 
-    # compute the distance covered by summing up the partial distances, with filtering out the
-    # "distance covered" between the last sampling of the 1st half and first sampling of the 2nd half
-    # (i.e. delta_t must be within 3 minutes [can be adapted in case of overtimes etc.])     -- 1st&2nd conditions
-    # as well as some anomalies, such as running faster than Usain Bolt (>12.3m/s)           -- 3rd condition
-    # or ultra slow walking (<0.123/s)                                                      -- 4th condition
-    # [such entries are treated as errors and are ignored]
-    df2 = pd.concat([dist_delta, t_delta.rename(columns={'time': 'delta_t'})], axis=1)
-    distance = df2.loc[(0 < df2['delta_t']) & (df2['delta_t'] < 180)
-                       & (df2['dist'] / (100 * df2['delta_t']) < 12.3)
-                       & (df2['dist'] / (100 * df2['delta_t']) > 0.123), 'dist'].sum()
+    # add velocity vectors for each timestamp
+    dist_delta['vx'] = dist_delta['dx'] / dist_delta['dt'] / 100
+    dist_delta['vy'] = dist_delta['dy'] / dist_delta['dt'] / 100
 
-    plrs[id] = round(distance / 100000, 3)
+    # filter out erroneous position frames
+    dist_delta = dist_delta.loc[(0 < dist_delta['dt']) & (dist_delta['dt'] < 5 * 60)
+                                & (np.sqrt(dist_delta['vx'] ** 2 + dist_delta['vy'] ** 2) < 12)
+                                & (np.sqrt(dist_delta['vx'] ** 2 + dist_delta['vy'] ** 2) > 0.05)]
+
+    # smooth out the results - if the results are not satisfying, one can play around with the
+    # sizes of the moving windows
+    #
+    # distances smoothed using rolling median (moving time window of size 2.8s)
+    # velocities smoothed using Savitzky-Golay filter (of linear order, window of size 25 entries ~ 1s)
+    dist_delta['dx'] = dist_delta['dx'].rolling('2800ms').median()
+    dist_delta['dy'] = dist_delta['dy'].rolling('2800ms').median()
+    if not pd.isnull(dist_delta['vx']).all():
+        dist_delta['vx'] = signal.savgol_filter(dist_delta['vx'], 25, 1)
+        dist_delta['vy'] = signal.savgol_filter(dist_delta['vy'], 25, 1)
+
+    # total velocity & acceleration
+    # cumulative distance covered & cumulative minutes played (counting from 'start' parameter)
+    dist_delta['v'] = np.sqrt(dist_delta['vx'] ** 2 + dist_delta['vy'] ** 2)
+    dist_delta['a'] = dist_delta['v'].diff() / dist_delta['dt']
+    dist_delta['c_dist'] = np.sqrt(dist_delta['dx'] ** 2 + dist_delta['dy'] ** 2).cumsum() / 100000
+    dist_delta['mins'] = dist_delta['dt'].cumsum() / 60
+
+    distance = dist_delta['c_dist'].max()
+    mins_played = dist_delta['mins'].max()
+
+    if normalized:
+        distance = round(distance * 90 / mins_played, 3)
+    else:
+        distance = round(distance, 3)
+
+    plrs[id] = distance
+
     return distance
 
 
-# ============================================================#
-# demo part
-
-def printDistances(team):
-    """
-    for every player of :param team who played, print their distance covered
-    """
-    for key in plrs.keys():
-        x = next((p for p in team if p.id == key), False)
-        if x:
-            print(x.name + ':', str(plrs[key]) + 'km')
-
-
-italy = getPlayerInfos(66)
-wales = getPlayerInfos(144)
-
-ids_it, ids_w = [], []
-for player in italy:
-    ids_it.append(player.id)
-for player in wales:
-    ids_w.append(player.id)
-
-print('Italy: ')
-distTeam(ids_it)
-printDistances(italy)
-
-total_it = 0
-for value in plrs.values():
-    total_it += value
-
-total_it = round(total_it, 3)
-
-print('\n\nWales: ')
-distTeam(ids_w)
-printDistances(wales)
-
-total_w = 0
-for value in plrs.values():
-    total_w += value
-
-total_w = round(total_w, 3)
-total = total_w + total_it
-print('\n\nItaly:', str(total_it) + 'km\nWales', str(total_w) + 'km\nTotal:', str(total) + 'km')
