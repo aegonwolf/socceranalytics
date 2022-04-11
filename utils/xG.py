@@ -57,7 +57,7 @@ def xGPlot(eventsFilePath):
         meta = team_meta[team]
         end_score = team_current_score[team]
 
-        color = "forestgreen" if meta["name"] == "Italy" else "red"
+        color = "blue" if meta["name"] == "Italy" else "red"
         ax.plot(
             [0] + points + [end],
             [0] + team_shot_y_points.get(team, []) + [end_score],
