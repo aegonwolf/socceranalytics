@@ -1,22 +1,40 @@
+import math
 from datetime import datetime
-import multiprocess as mp
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pa
+from matplotlib import pyplot as plt
+
 from player import *
 
 start_time = pd.Timestamp('1970-01-01 02:00:00')
+
 
 # this module is supposed to replace both running.py and running_global.py
 # it will be more efficient & offer some more functionality
 
 
-def prep_df(players, path, first=False, second=False, regtime=False, overtime=False, begin=0, end=150, norm=False):
+def prep_df(players, path, first=False, second=False, regtime=False, overtime=False, begin=0, end=150):
+    """
+    The function prepares a dataframe containing distances, velocities, accelerations of every player from a single game,
+    within the given time window
+    @param players: a list of player ids of the players you're interested in
+    @param path: a path to the parquet dataframe with 'raw' tracking data for every player (see snippet @422)
+    @param first: a bool var -> if True, the considered time window is the 1st half only (by default set to False)
+    @param second: a bool var -> if True, the considered time window is the 2nd half only (by default set to False)
+    @param regtime: a bool var -> if True, the considered time window is the regular (+incl. stoppage) time only
+     (by default set to False)
+    @param overtime: a bool var -> if True, the considered time window is the overtime only (by default set to False)
+    @param begin: a minute where your start window begins
+    @param end: a minute where your start window ends
+    @return: a dataframe with columns of form ['106737_dx', '106737_dy', '106737_mins', '106737_vx', '106737_vy',
+       '106737_v', '106737_a', '106737_dist'...] (<playerID>_<attr>)
+    """
     # prepare the base for calculating the distances, velocities & accelerations
     # of the players from the 'raw' dataframe of the whole game
     table = pa.read_table(path)
     df_init = table.select(['time'] + [col for col in table.column_names if ('ball' not in col) and
-                                  (('_x' in col) or ('_y' in col) or ('_sampling' in col))]).to_pandas()
+                                       (('_x' in col) or ('_y' in col) or ('_sampling' in col))]).to_pandas()
     samplings = [col for col in table.column_names if ('ball' not in col) and ('_sampling' in col)]
     for col in samplings:
         df_init = df_init.loc[df_init[col] != 2]  # remove all unreliable samplings
@@ -27,9 +45,6 @@ def prep_df(players, path, first=False, second=False, regtime=False, overtime=Fa
     df_init.rename(columns={'time': 'dt'}, inplace=True)
     df_init['dt'] = df_init['dt'].map(lambda x: x.total_seconds())
     df_init['time'] = table.select(['time']).to_pandas()  # we'll need the original 'time' column for the future
-
-
-
 
     # match the column names of the dataframe with the players we're focusing on
     coords = list(map((lambda x: x + '_x'), players)) + list(map((lambda x: x + '_y'), players))
@@ -66,6 +81,7 @@ def prep_df(players, path, first=False, second=False, regtime=False, overtime=Fa
     # start of the 2nd half timestamp
     start_scnd = scnd_first_frame.iloc[0] - start_time
 
+    # consider the passed parameters
     if first:
         start = start_match.total_seconds()
         stop = start_match.total_seconds() + fst_dur
@@ -100,23 +116,18 @@ def prep_df(players, path, first=False, second=False, regtime=False, overtime=Fa
     # set the time window
     window_begin = datetime.fromtimestamp(start)
     window_end = datetime.fromtimestamp(stop)
-
-    print(window_begin)
-    print(window_end)
-
     df = df.set_index('time')
     df = df.loc[((df.index - window_begin).total_seconds() >= 0)
                 & ((window_end - df.index).total_seconds() >= 0)].dropna(axis=1, how='all')
 
     combined = pd.DataFrame(index=df.index)
 
+    # compute distances, velocities, accelerations for each player & join the resulting dfs together
     for p in players:
         if (p + '_x') in df.columns:
-            df_p = df[[(p + '_x'), (p + '_y')]].dropna()
-            df_p = df_p.rolling('2550ms').median()
-
+            df_p = df.loc[(0 < df['dt']) & (df['dt'] < 5 * 60), [(p + '_x'), (p + '_y')]]
+            df_p = df_p.rolling('2250ms').median()
             df_p['dt'] = df['dt']
-            df_p = df_p.loc[(0 < df_p['dt']) & (df_p['dt'] < 5 * 60)]
             df_p[p + '_mins'] = df_p['dt'].cumsum() / 60
 
             df_p[p + '_vx'] = df_p[(p + '_x')] / df_p['dt'] / 100
@@ -127,29 +138,119 @@ def prep_df(players, path, first=False, second=False, regtime=False, overtime=Fa
 
             df_p[p + '_v'] = np.sqrt(df_p[p + '_vx'] ** 2 + df_p[p + '_vy'] ** 2)
             df_p[p + '_a'] = df_p[p + '_v'].diff() / df_p['dt']
-            df_p[p + '_dist'] = np.sqrt(df_p[p + '_x'] ** 2 + df_p[p + '_y'] ** 2).cumsum() / 100000
+            df_p[p + '_dist'] = np.sqrt(df_p[p + '_x'] ** 2 + df_p[p + '_y'] ** 2) / 100000
 
+            df_p.rename(columns={(p + '_x'): (p + '_dx'), (p + '_y'): (p + '_dy')}, inplace=True)
             combined = combined.join(df_p.drop(['dt'], axis=1))
 
     return combined
 
 
+#  & return
 def distsTournament(teamName, teamID):
+    """
+    go over all team's games during the tournament and compute distances covered by every player in the team
+    @param teamName: name of the team
+    @param teamID: UEFA's teamID of the team
+    @return: a df which contains distances covered by every team member in each game
+    """
     pass
     # TODO
 
 
 def minToMin(playersA, playersB, match_path):
-    pass
-    # TODO
+    """
+    minute by minute distance covered comparison of two teams (based on the whole game)
+    @param playersA: a list of home team's players' ids
+    @param playersB: a list of away team's players' ids
+    @param match_path: a path to the parquet dataframe with 'raw' tracking data for every player (see snippet @422)
+    @return: a dataframe of form:
+                  total_A    total_B
+    min
+    0.000667     0.000239   0.000326
+    ...          ...        ...
+    93.018667  101.266587  98.302286
+    """
+
+    # prepare the distance dataframe for both teams
+    df_A = prep_df(playersA, match_path)
+    df_B = prep_df(playersB, match_path)
+
+    t = pd.DataFrame(df_A.index)
+    t.set_index(df_A.index, inplace=True)
+    t['time'] = t['time'].diff().map(lambda x: x.total_seconds())
+    t['time'] = t.loc[t['time'] < 5 * 60, ['time']].cumsum() / 60  # filter out the break(s) - might not always work,
+                                                                   # but it was sufficient in our case
+
+    dists_A = [col for col in df_A.columns if 'dist' in col]
+    df_A = df_A[dists_A]
+
+    dists_B = [col for col in df_B.columns if 'dist' in col]
+    df_B = df_B[dists_B]
+
+    df_A['total_A'] = df_A.sum(axis=1).cumsum()
+
+    df_A['min'] = t
+    df_A.set_index('min', inplace=True)
+    df_B['min'] = t
+    df_B.set_index('min', inplace=True)
+    df_B['total_B'] = df_B.sum(axis=1).cumsum()
+
+    df_total = df_A.loc[:, ['total_A']].join(df_B.loc[:, ['total_B']])
+
+    return df_total[df_total.index.notnull()]
 
 
-italy = getPlayerInfos(66)
-ids_it = []
-names = {}
-for player in italy:
-    ids_it.append(player.id)
-    names[player.id] = player.name
+# it - 66
+# wal - 144
+# bel - 13
+def plotMinByMin(path, teamidA, teamidB, teamAname, teamBname, goalsA=[], goalsB=[], redA=[], redB=[], savepath=None):
+    """
+    plot the minute by minute distance comparison with indicators for goals and red cards
+    @param path: a path to the parquet dataframe with 'raw' tracking data for every player (see snippet @422)
+    @param teamidA: UEFA's teamID of home team
+    @param teamidB: UEFA's teamID of away team
+    @param teamAname: name of home team
+    @param teamBname: name of away team
+    @param goalsA: list of timestamps(in minutes) where home team scored the goals
+    @param goalsB: list of timestamps(in minutes) where away team scored the goals
+    @param redA: list of timestamps(in minutes) where home team got a red card
+    @param redB: list of timestamps(in minutes) where away team got a red card
+    @param savepath: a path to directory where you want to save the plot (by default the plot is not saved)
+    """
+    plrsA = getPlayerInfos(teamidA)
+    ids_A = []
+    for player in plrsA:
+        ids_A.append(player.id)
 
-path = '/home/igor/PycharmProjects/socceranalytics/dataframes/belgiumvitaly.pq'
-print(prep_df(ids_it, path, begin=10, end=80))
+    plrsB = getPlayerInfos(teamidB)
+    ids_B = []
+    for player in plrsB:
+        ids_B.append(player.id)
+
+    df = minToMin(ids_A, ids_B, path)
+    x_t = list(range(0, math.ceil(df.index[-1] + 5), 5))
+    y_t = list(range(0, math.ceil(max(df['total_A'].iloc[-1], df['total_B'].iloc[-1]) + 5), 10))
+    df['total_A'].plot(kind='line', xticks=x_t, yticks=y_t, label=teamAname + ' dist')
+    df['total_B'].plot(kind='line', xticks=x_t, yticks=y_t, label=teamBname + ' dist', color='#e50000')
+    plt.title("Minute by minute teams' distance covered")
+    plt.ylabel('distance covered by teams [km]')
+    plt.grid(True)
+    for event in goalsA:
+        plt.axvline(x=event, linewidth=0.5, label=teamAname + ' goal')
+    for event in goalsB:
+        plt.axvline(x=event, linewidth=0.5, label=teamBname + ' goal', color='#e50000')
+
+    for event in redA:
+        plt.axvline(x=event, linewidth=0.5, label=teamAname + ' red card', color='darkblue')
+    for event in redB:
+        plt.axvline(x=event, linewidth=0.5, label=teamBname + ' red card', color='darkred')
+
+    plt.legend()
+    if savepath is not None:
+        plt.savefig(savepath + teamAname.lower() + '-' + teamBname.lower() + '_minByMin.png', dpi=300)
+    plt.show()
+
+
+# example of usage:
+# plotMinByMin('/.../italyvwales.pq', 66, 144, 'ITA', 'WAL', goalsA=[39], redB=[55], savepath='')
