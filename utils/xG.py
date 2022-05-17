@@ -1,7 +1,5 @@
 import matplotlib.pyplot as plt
 import json
-import zipfile
-import argparse
 
 def xGPlot(eventsFilePath):
     with open(eventsFilePath) as f:   
@@ -36,6 +34,7 @@ def xGPlot(eventsFilePath):
 
         # Increment score
         xg = shot["xg"]
+        print(xg, team_meta[team_id]["name"])
         team_current_score[team_id] = old_score + xg
 
         team_shot_x_points.setdefault(team_id, []).append(event["minute"])

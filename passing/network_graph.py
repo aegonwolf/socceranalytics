@@ -58,7 +58,7 @@ def plot_passing_network(team_name, opponent_name, match_id, df_events, home_tea
     # Calculate average player position
     df_passes["origin.pos.x"] = df_passes.location.apply(lambda x: statsbomb_to_point(x)[0])
     df_passes["origin.pos.y"] = df_passes.location.apply(lambda x: statsbomb_to_point(x)[1])
-    player_position = df_passes.groupby("player.name").agg({"origin.pos.x": "median", "origin.pos.y": "median"})
+    player_position = df_passes.groupby("player.name").agg({"origin.pos.x": "mean", "origin.pos.y": "mean"})
 
     player_pass_count = df_passes.groupby("player.name").size().to_frame("num.passes")
     player_pass_value = df_passes.groupby("player.name").size().to_frame("pass.value")
