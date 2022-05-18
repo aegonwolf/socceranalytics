@@ -11,7 +11,7 @@ for a given team.
 import requests
 from bs4 import BeautifulSoup
 
-baseURL = "https://www.uefa.com/uefaeuro-2020/teams/"
+baseURL = "https://web.archive.org/web/20220130164300/https://www.uefa.com/uefaeuro-2020/teams/"
 
 class Player:
     def __init__(self, attr):
@@ -23,8 +23,8 @@ class Player:
         self.gamesPlayed    = attr[5]
         self.goals          = attr[6]
 
-def getPlayerInfos(teamID):
-    teamURL = baseURL + str(teamID) + "/squad/"
+def getPlayerInfos(teamID, teamName):
+    teamURL = baseURL + str(teamID) + f'--{teamName}/squad/'
 
     # Get the HTML from the site
     page = requests.get(teamURL)
@@ -62,3 +62,5 @@ def getPlayerInfos(teamID):
             ]))
 
     return players
+
+print(getPlayerInfos(66, 'italy'))
