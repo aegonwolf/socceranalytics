@@ -1,0 +1,15 @@
+{
+    "text_color": "royalblue",
+    "header": {
+        "color": "black",
+        "size": 20
+    },
+    "team_title": {
+        "color": "black",
+        "size": 16
+    },
+    "team_colors": {
+        "Italy": "blue",
+        "Wales": "red"
+    }
+}
