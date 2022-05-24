@@ -1,4 +1,7 @@
 # private match data
 data/
+.idea/
+.ipynb_checkpoints/
+*.mp4
 */__pycache__
 .DS_Store
