@@ -1,8 +1,10 @@
 import math
+import sys
 from datetime import datetime
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pa
+import glob
 from matplotlib import pyplot as plt
 
 from player import *
@@ -111,7 +113,7 @@ def prep_df(players, path, first=False, second=False, regtime=False, overtime=Fa
             end += break_dur / 60
 
         start = begin * 60 + start_match.total_seconds()
-        stop = min(end * 60, fst_dur + scnd_dur + break_dur) + start_match.total_seconds()
+        stop = end * 60 + start_match.total_seconds()
 
     # set the time window
     window_begin = datetime.fromtimestamp(start)
@@ -147,15 +149,42 @@ def prep_df(players, path, first=False, second=False, regtime=False, overtime=Fa
 
 
 #  & return
-def distsTournament(teamName, teamID):
+def distsTournament(team, players, first=False, second=False, regtime=False, overtime=False, begin=0, end=150, norm = False, save=False):
     """
     go over all team's games during the tournament and compute distances covered by every player in the team
-    @param teamName: name of the team
-    @param teamID: UEFA's teamID of the team
+    @param team: name of the team
+    @param players: list of player ids of the team you're interested in
+    @param first, second, regtime, overtime, begin, end: choose the period of the games you're interested in
+    @param save: set to True if you want to store the dataframe
     @return: a df which contains distances covered by every team member in each game
     """
     pass
-    # TODO
+    directory = '/Users/igor/PycharmProjects/soccer-analytics/dataframes/'
+    df = pd.DataFrame({'id': players}).set_index('id')
+    for filename in glob.iglob(f'{directory}*'):
+        if team.lower() in filename.lower():
+            temp = prep_df(players, filename, first, second, regtime, overtime, begin, end)
+            dists = [col for col in temp.columns if 'dist' in col]
+            mins = [col for col in temp.columns if 'mins' in col]
+
+            isHome = (filename[len(directory):len(directory + team)] == team)
+            if isHome:
+                label = team[0:3].upper() + ' - ' + filename[(len(directory) + len(team) + 1):(
+                            len(directory) + len(team) + 4)].upper()
+            else:
+                label = filename[(len(directory)):(len(directory) + 3)].upper() + ' - ' + team[0:3].upper()
+
+            temp2 = pd.DataFrame(temp[dists].sum(), columns={label})
+            temp2.index = temp2.index.map(lambda x: x.strip('_dist'))
+            if norm:
+                temp3 = temp[mins].max()
+                print(temp3)
+                temp3.index = temp3.index.map(lambda x: x.strip('_mins'))
+                # temp2 = temp2.divide(temp3)
+            df = df.join(temp2)
+    if save:
+        df.to_parquet(team + '_dists.parquet', index=True)
+    return df
 
 
 def minToMin(playersA, playersB, match_path):
@@ -229,7 +258,11 @@ def plotMinByMin(path, teamidA, teamidB, teamAname, teamBname, goalsA=[], goalsB
         ids_B.append(player.id)
 
     df = minToMin(ids_A, ids_B, path)
-    x_t = list(range(0, math.ceil(df.index[-1] + 5), 5))
+    if df.index[-1] >= 120:
+        tick = 10
+    else:
+        tick = 5
+    x_t = list(range(0, math.ceil(df.index[-1] + 5), tick))
     y_t = list(range(0, math.ceil(max(df['total_A'].iloc[-1], df['total_B'].iloc[-1]) + 5), 10))
     df['total_A'].plot(kind='line', xticks=x_t, yticks=y_t, label=teamAname + ' dist')
     df['total_B'].plot(kind='line', xticks=x_t, yticks=y_t, label=teamBname + ' dist', color='#e50000')
@@ -237,14 +270,14 @@ def plotMinByMin(path, teamidA, teamidB, teamAname, teamBname, goalsA=[], goalsB
     plt.ylabel('distance covered by teams [km]')
     plt.grid(True)
     for event in goalsA:
-        plt.axvline(x=event, linewidth=0.5, label=teamAname + ' goal')
+        plt.axvline(x=event, linestyle='dashed', label=teamAname + ' goal')
     for event in goalsB:
-        plt.axvline(x=event, linewidth=0.5, label=teamBname + ' goal', color='#e50000')
+        plt.axvline(x=event, linestyle='dashed', label=teamBname + ' goal', color='#e50000')
 
     for event in redA:
-        plt.axvline(x=event, linewidth=0.5, label=teamAname + ' red card', color='darkblue')
+        plt.axvline(x=event, linestyle='dotted', label=teamAname + ' red card')
     for event in redB:
-        plt.axvline(x=event, linewidth=0.5, label=teamBname + ' red card', color='darkred')
+        plt.axvline(x=event, linestyle='dotted', label=teamBname + ' red card', color='#e50000')
 
     plt.legend()
     if savepath is not None:
@@ -253,4 +286,37 @@ def plotMinByMin(path, teamidA, teamidB, teamAname, teamBname, goalsA=[], goalsB
 
 
 # example of usage:
-# plotMinByMin('/.../italyvwales.pq', 66, 144, 'ITA', 'WAL', goalsA=[39], redB=[55], savepath='')
+
+# plotMinByMin('italyvwales.pq', 66, 144, 'ITA', 'WAL', goalsA=[39], redB=[55], savepath='dashed')
+# plotMinByMin('italyvspain.pq', 66, 122, 'ITA', 'SPA', goalsA=[60], goalsB=[80], savepath='dashed_')
+
+# dict = {}
+# plrsA = getPlayerInfos(66)
+# ids_A = []
+# for player in plrsA:
+#     # print(player.name)
+#     dict[player.id] = player.name
+#     ids_A.append(player.id)
+#
+# plrsB = getPlayerInfos(144)
+# ids_B = []
+# for player in plrsB:
+#     ids_B.append(player.id)
+#
+# original_stdout = sys.stdout # Save a reference to the original standard output
+# # df = distsTournament('italy', ids_A, save=True)
+# df2 = distsTournament('wales', ids_B, save=True)
+# # df.index = df.index.map(lambda x: dict[x])
+#
+#
+# desired_width=320
+#
+# pd.set_option('display.width', desired_width)
+# pd.set_option('display.max_columns',10)
+#
+# print(df2)
+
+
+
+# print(ids_A)
+# print(prep_df(ids_A, 'italyvwales.pq', first=True,))
