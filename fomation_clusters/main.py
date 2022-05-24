@@ -129,7 +129,7 @@ if __name__ == '__main__':
             for i in range(len(clusters_idx[cluster_index])):
                 plot_cluster(np.array(formation_clusters_ordered[cluster_index][i]), fig, ax, True)
             plt.title(get_fig_title(key, cluster_index+1))
-            plt.savefig(f"assets/Prototypes_Points_{key}_Cluster_{cluster_index + 1}", facecolor='white', transparent=False)
+            plt.savefig(f"assets/formation_clusters/points_{key}_Cluster_{cluster_index + 1}", facecolor='white', transparent=False)
             # plt.show()
 
         for i in range(len(clusters_idx)):
@@ -137,7 +137,7 @@ if __name__ == '__main__':
             # players = active_players[f'team{clustering_name[0]}_{clustering_name[1:]}_{i+1}']
             plot_formation_cluster_compact([means_cluster[i], cov_cluster[i]])
             plt.title(get_fig_title(key, i+1))
-            plt.savefig(f"assets/Prototypes_coloredellipse_{key}_Cluster_{i+ 1}.png", facecolor='white', transparent=False)
+            plt.savefig(f"assets/formation_clusters/coloredellipse_{key}_Cluster_{i+ 1}.png", facecolor='white', transparent=False)
             # print(f"{key} Cluster with index {i+1}")
             # plt.show()
 

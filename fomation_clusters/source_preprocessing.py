@@ -137,7 +137,6 @@ def correct_player_cordinates(df, breaks):
 
 
 def get_sg_window_coords(df, df_players, phases, ball_possessions, breaks):
-
     player_ids_home = [key.split('_')[0] for key in [k for k in df.keys() if 'type' in k] if df[key].mean() == 0]
     player_ids_away = [key.split('_')[0] for key in [k for k in df.keys() if 'type' in k] if df[key].mean() == 1]
 
@@ -157,6 +156,7 @@ def get_sg_window_coords(df, df_players, phases, ball_possessions, breaks):
         )
         .cumsum()
     )
+
     windows_mask = pd.Series(
             (df_players.index.isin(df_players.index[(df_players.isnull().shift() != df_players.isnull()).any(axis=1)])
             | df_players.index.isin(breaks.index)), index=df_players.index)
@@ -197,19 +197,40 @@ def get_sg_window_coords(df, df_players, phases, ball_possessions, breaks):
     a = (phases != phases.shift())
 
     for idx in phases.index:
-        if ((a[idx] == True) or (idx == a.index[-1])) and (idx != a.index[0]):
-            if ball_possessions[window[0]] == 'Home':
-                active_players_home = df_players.loc[window][players_home].isnull().any().index[~df_players.loc[window][players_home].isnull().any()]
-                active_players_away = df_players.loc[window][players_away].isnull().any().index[~df_players.loc[window][players_away].isnull().any()]
-                windows_coords['team_1_offensive'].append((df_players.loc[window][active_players_home].values.reshape(-1, 11, 2)))
-                windows_coords['team_2_defensive'].append((df_players.loc[window][active_players_away].values.reshape(-1, 11, 2)))
-            else:
-                active_players_home = df_players.loc[window][players_home].isnull().any().index[~df_players.loc[window][players_home].isnull().any()]
-                active_players_away = df_players.loc[window][players_away].isnull().any().index[~df_players.loc[window][players_away].isnull().any()]
-                windows_coords['team_1_defensive'].append((df_players.loc[window][active_players_home].values.reshape(-1, 11, 2)))
-                windows_coords['team_2_offensive'].append((df_players.loc[window][active_players_away].values.reshape(-1, 11, 2)))
-            window = [idx]
-        else: 
-            window.append(idx)
+        # Problem: after a red card there are only 10 players and the reshape does not work
+        # player250097090_x
+        try:
+            if ((a[idx] == True) or (idx == a.index[-1])) and (idx != a.index[0]):
+                if ball_possessions[window[0]] == 'Home':
+                    active_players_home = df_players.loc[window][players_home].isnull().any().index[~df_players.loc[window][players_home].isnull().any()]
+                    active_players_away = df_players.loc[window][players_away].isnull().any().index[~df_players.loc[window][players_away].isnull().any()]
+
+                    windows_coords['team_1_offensive'].append((df_players.loc[window][active_players_home].values.reshape(-1, 11, 2)))
+                    
+                    if len(active_players_away) < 22:
+                        active_players_away.append('player250097090_x')
+                        active_players_away.append('player250097090_y')
+                    
+                    windows_coords['team_2_defensive'].append((df_players.loc[window][active_players_away].values.reshape(-1, 11, 2)))
+                
+                else:
+                    active_players_home = df_players.loc[window][players_home].isnull().any().index[~df_players.loc[window][players_home].isnull().any()]
+                    active_players_away = df_players.loc[window][players_away].isnull().any().index[~df_players.loc[window][players_away].isnull().any()]
+                    windows_coords['team_1_defensive'].append((df_players.loc[window][active_players_home].values.reshape(-1, 11, 2)))
+                    
+                    if len(active_players_away) < 22:
+                        active_players_away.append('player250097090_x')
+                        active_players_away.append('player250097090_y')
+                    
+                    windows_coords['team_2_offensive'].append((df_players.loc[window][active_players_away].values.reshape(-1, 11, 2)))
+                    
+                window = [idx]
+            else: 
+                window.append(idx)
+        except:
+            print(active_players_away)
+            print(active_players_home)
+            break
+
 
     return windows_coords
