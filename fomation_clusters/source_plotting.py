@@ -198,11 +198,11 @@ def plot_formation_cluster_compact(formation, coords_transformation = True):
 # very specific to our match, change if necessary
 def get_fig_title(key: str, clusters_idx: int):
     if '_1_' in key and 'defensive' in key: 
-        return f'Italy Defensive Formation Cluster Number {clusters_idx}.'
+        return f'Italy Defensive Formation Cluster Number {clusters_idx}'
     elif '_1_' in key and 'offensive' in key:
-        return f'Italy Attacking Formation Cluster Number {clusters_idx}.'
+        return f'Italy Attacking Formation Cluster Number {clusters_idx}'
     elif '_2_' in key and 'defensive' in key:
-        return f'Wales Defensive Formation Cluster Number {clusters_idx}.'
+        return f'Wales Defensive Formation Cluster Number {clusters_idx}'
     elif '_2_' in key and 'offensive' in key:
-        return f'Wales Attacking Formation Cluster Number {clusters_idx}.'
+        return f'Wales Attacking Formation Cluster Number {clusters_idx}'
     else: ValueError('Invalid Key or Index')
