@@ -1,0 +1,33 @@
+{
+    'id': 957965969,
+    'matchId': 5034296,
+    'matchPeriod': '2H',
+    'minute': 52,
+    'second': 22,
+    'matchTimestamp': '00:52:22.605',
+    'videoTimestamp': '3172.605822',
+    'relatedEventId': None,
+    'type': { 'primary': 'free_kick', 'secondary': ['free_kick_shot', 'opportunity', 'shot'] },
+    'location': { 'x': 72, 'y': 62 },
+    'team': { 'id': 3757, 'name': 'Italy', 'formation': '4-3-3' },
+    'opponentTeam': { 'id': 10682, 'name': 'Wales', 'formation': '5-4-1' },
+    'player': { 'id': 246061, 'name': 'F. Bernardeschi', 'position': 'LWF' },
+    'pass': None,
+    'shot': { 'bodyPart': 'left_foot', 'isGoal': False, 'onTarget': False, 'goalZone': 'plb', 'xg': 0.000758, 'postShotXg': None, 'goalkeeperActionId': None, 'goalkeeper': None },
+    'groundDuel': None,
+    'aerialDuel': None,
+    'infraction': None,
+    'carry': None,
+    'possession': {
+        'id': 957965969,
+        'duration': '4.987962',
+        'types': ['set_piece_attack', 'free_kick', 'direct_free_kick'],
+        'eventsNumber': 2,
+        'eventIndex': 0,
+        'startLocation': { 'x': 72, 'y': 62 },
+        'endLocation': { 'x': 100, 'y': 11 },
+        'team': { 'id': 3757, 'name': 'Italy', 'formation': '4-3-3' },
+        'attack': None
+    }
+}
+Traceback(most recent call last):
