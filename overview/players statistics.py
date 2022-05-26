@@ -239,44 +239,82 @@ def radar_mosaic(radar_height=0.915, title_height=0.06, figheight=14):
     axes['title'].axis('off')
     return figure, axes
 
-for team in ['Italy', 'Wales']:
-    for (player_id, values) in player_stats_avarage[team].items():
-        if max(list(values.values())) > 0:
-            name = player_names[player_id]
-            position = player_position[player_id]
+# for team in ['Italy', 'Wales']:
+#     for (player_id, values) in player_stats_avarage[team].items():
+#         if max(list(values.values())) > 0:
+#             name = player_names[player_id]
+#             position = player_position[player_id]
+
+#             if position in defense:
+#                 radar = defense_radar
+
+#                 avg_val = [values[param] for param in defense_params]
+#                 val     = [player_stats[matches['Both'][0]][player_id][param] for param in defense_params]
+#             elif position in attack:
+#                 radar = attack_radar
+
+#                 avg_val = [values[param] for param in attack_params]
+#                 val     = [player_stats[matches['Both'][0]][player_id][param] for param in attack_params]
+
+#             fig, axs = radar_mosaic()
+#             radar.setup_axis(ax=axs['radar'])
+
+#             rings_inner = radar.draw_circles(ax=axs['radar'], facecolor='#fff', edgecolor='#b8b8b8')  # draw circles
+
+#             radar_output = radar.draw_radar_compare(list(val), list(avg_val), ax=axs['radar'],
+#                                         kwargs_radar   ={'facecolor': '#3d85c6', 'alpha': 0.6, 'edgecolor': '#073A67', 'linewidth': 2},
+#                                         kwargs_compare ={'facecolor': '#3eb700', 'alpha': 0.5, 'edgecolor': '#081e00', 'linewidth': 2})
+            
+#             radar_poly, radar_poly2, vertices1, vertices2 = radar_output
+#             range_labels = radar.draw_range_labels(ax=axs['radar'], fontsize=15, fontproperties=robotto_thin.prop)  # draw the range labels
+#             param_labels = radar.draw_param_labels(ax=axs['radar'], fontsize=20, fontproperties=robotto_regular.prop) 
+            
+#             title1_text = axs['title'].text(0.5, 0.1, f'{name} - ({team})', fontsize=35, color='#000000',
+#                                 fontproperties=robotto_bold.prop, ha='center', va='center')
+
+#             title2_text = axs['title'].text(0.98, 0.5, 'Game Stats', fontsize=25, color='#3d85c6',
+#                                 fontproperties=robotto_bold.prop, ha='right', va='center')
+
+#             title3_text = axs['title'].text(0.98, 0.05, 'Tournament Avg', fontsize=25, color='#3eb700',
+#                                 fontproperties=robotto_bold.prop, ha='right', va='center')
+
+#             plt.savefig(f'assets/player_stats/{name}-{team}-{position}.png', dpi=300)
+#             plt.close()
+
+
+for team in ['Italy']:
+    for player_id1, player_id2 in [(21383, 447804)]:
+            name1 = player_names[player_id1]
+            name2 = player_names[player_id2]
+            position = player_position[player_id1]
 
             if position in defense:
                 radar = defense_radar
-
-                avg_val = [values[param] for param in defense_params]
-                val     = [player_stats[matches['Both'][0]][player_id][param] for param in defense_params]
+                val_p1     = [player_stats[matches['Both'][0]][player_id1][param] for param in attack_params]
+                val_p2     = [player_stats[matches['Both'][0]][player_id2][param] for param in attack_params]
             elif position in attack:
                 radar = attack_radar
-
-                avg_val = [values[param] for param in attack_params]
-                val     = [player_stats[matches['Both'][0]][player_id][param] for param in attack_params]
+                val_p1     = [player_stats[matches['Both'][0]][player_id1][param] for param in attack_params]
+                val_p2     = [player_stats[matches['Both'][0]][player_id2][param] for param in attack_params]
 
             fig, axs = radar_mosaic()
             radar.setup_axis(ax=axs['radar'])
 
             rings_inner = radar.draw_circles(ax=axs['radar'], facecolor='#fff', edgecolor='#b8b8b8')  # draw circles
 
-            radar_output = radar.draw_radar_compare(list(val), list(avg_val), ax=axs['radar'],
-                                        kwargs_radar   ={'facecolor': '#3d85c6', 'alpha': 0.6, 'edgecolor': '#073A67', 'linewidth': 2},
-                                        kwargs_compare ={'facecolor': '#3eb700', 'alpha': 0.5, 'edgecolor': '#081e00', 'linewidth': 2})
+            radar_output = radar.draw_radar_compare(list(val_p1), list(val_p2), ax=axs['radar'],
+                                        kwargs_radar   ={'facecolor': '#3d85c6', 'alpha': 0.5, 'edgecolor': '#073A67', 'linewidth': 3},
+                                        kwargs_compare ={'facecolor': '#3eb700', 'alpha': 0.5, 'edgecolor': '#081e00', 'linewidth': 3})
             
             radar_poly, radar_poly2, vertices1, vertices2 = radar_output
             range_labels = radar.draw_range_labels(ax=axs['radar'], fontsize=15, fontproperties=robotto_thin.prop)  # draw the range labels
             param_labels = radar.draw_param_labels(ax=axs['radar'], fontsize=20, fontproperties=robotto_regular.prop) 
             
-            title1_text = axs['title'].text(0.5, 0.1, f'{name} - ({team})', fontsize=35, color='#000000',
-                                fontproperties=robotto_bold.prop, ha='center', va='center')
+            title1_text = axs['title'].text(0.05, 0.1, name1, fontsize=35, color='#3d85c6',
+                                fontproperties=robotto_bold.prop, ha='left', va='center')
 
-            title2_text = axs['title'].text(0.98, 0.5, 'Game Stats', fontsize=25, color='#3d85c6',
+            title2_text = axs['title'].text(0.95, 0.1, name2, fontsize=35, color='#3eb700',
                                 fontproperties=robotto_bold.prop, ha='right', va='center')
 
-            title3_text = axs['title'].text(0.98, 0.05, 'Tournament Avg', fontsize=25, color='#3eb700',
-                                fontproperties=robotto_bold.prop, ha='right', va='center')
-
-            plt.savefig(f'assets/player_stats/{name}-{team}.png', dpi=300)
+            plt.savefig(f'assets/player_stats/{name1}-{name2}.png', dpi=300)
             plt.close()
