@@ -95,7 +95,8 @@ def prep_df(players, path, first=False, second=False, regtime=False, overtime=Fa
         stop = start_match.total_seconds() + fst_dur + scnd_dur + break_dur
     elif overtime:
         if (((end_match - start_match).total_seconds() - break_dur) / 60) < 120:
-            return -1  # the game had no overtime
+            start = -1
+            stop = -1 # the game had no overtime
         else:
             # start of the overtime timestamp
             start_ot = (ot_first_frame - start_time).iloc[0]
@@ -149,7 +150,7 @@ def prep_df(players, path, first=False, second=False, regtime=False, overtime=Fa
 
 
 #  & return
-def distsTournament(team, players, first=False, second=False, regtime=False, overtime=False, begin=0, end=150, norm = False, save=False):
+def distsTournament(team, players, first=False, second=False, regtime=False, overtime=False, begin=0, end=150, norm=False, save=False, path=""):
     """
     go over all team's games during the tournament and compute distances covered by every player in the team
     @param team: name of the team
@@ -159,11 +160,12 @@ def distsTournament(team, players, first=False, second=False, regtime=False, ove
     @return: a df which contains distances covered by every team member in each game
     """
     pass
-    directory = '/Users/igor/PycharmProjects/soccer-analytics/dataframes/'
+    directory = '/home/igor/PycharmProjects/socceranalytics/dataframes/'
     df = pd.DataFrame({'id': players}).set_index('id')
     for filename in glob.iglob(f'{directory}*'):
         if team.lower() in filename.lower():
             temp = prep_df(players, filename, first, second, regtime, overtime, begin, end)
+
             dists = [col for col in temp.columns if 'dist' in col]
             mins = [col for col in temp.columns if 'mins' in col]
 
@@ -177,13 +179,12 @@ def distsTournament(team, players, first=False, second=False, regtime=False, ove
             temp2 = pd.DataFrame(temp[dists].sum(), columns={label})
             temp2.index = temp2.index.map(lambda x: x.strip('_dist'))
             if norm:
-                temp3 = temp[mins].max()
-                print(temp3)
+                temp3 = temp[mins].max() - temp[mins].min()
                 temp3.index = temp3.index.map(lambda x: x.strip('_mins'))
-                # temp2 = temp2.divide(temp3)
+                temp2 = temp2.div(temp3, axis=0) * 90
             df = df.join(temp2)
     if save:
-        df.to_parquet(team + '_dists.parquet', index=True)
+        df.to_parquet(path, index=True)
     return df
 
 
@@ -290,33 +291,58 @@ def plotMinByMin(path, teamidA, teamidB, teamAname, teamBname, goalsA=[], goalsB
 # plotMinByMin('italyvwales.pq', 66, 144, 'ITA', 'WAL', goalsA=[39], redB=[55], savepath='dashed')
 # plotMinByMin('italyvspain.pq', 66, 122, 'ITA', 'SPA', goalsA=[60], goalsB=[80], savepath='dashed_')
 
-# dict = {}
-# plrsA = getPlayerInfos(66)
-# ids_A = []
-# for player in plrsA:
-#     # print(player.name)
-#     dict[player.id] = player.name
-#     ids_A.append(player.id)
-#
-# plrsB = getPlayerInfos(144)
-# ids_B = []
-# for player in plrsB:
-#     ids_B.append(player.id)
-#
-# original_stdout = sys.stdout # Save a reference to the original standard output
-# # df = distsTournament('italy', ids_A, save=True)
-# df2 = distsTournament('wales', ids_B, save=True)
-# # df.index = df.index.map(lambda x: dict[x])
-#
-#
-# desired_width=320
-#
-# pd.set_option('display.width', desired_width)
-# pd.set_option('display.max_columns',10)
-#
-# print(df2)
+dict = {}
+plrsA = getPlayerInfos(66)
+ids_A = []
+for player in plrsA:
+    # print(player.name)
+    dict[player.id] = player.name
+    ids_A.append(player.id)
 
+plrsB = getPlayerInfos(144)
+ids_B = []
+for player in plrsB:
+    ids_B.append(player.id)
 
-
-# print(ids_A)
-# print(prep_df(ids_A, 'italyvwales.pq', first=True,))
+# distsTournament('italy', ids_A, save=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italy.parquet')
+# distsTournament('italy', ids_A, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italyNorm.parquet')
+#
+# distsTournament('italy', ids_A, first=True, save=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italy_1st.parquet')
+# distsTournament('italy', ids_A, first=True, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italyNorm_1st.parquet')
+#
+# distsTournament('italy', ids_A, second=True, save=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italy_2nd.parquet')
+# distsTournament('italy', ids_A, second=True, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italyNorm_2nd.parquet')
+#
+# distsTournament('italy', ids_A, overtime=True, save=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italy_overtime.parquet')
+# distsTournament('italy', ids_A, overtime=True, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italyNorm_overtime.parquet')
+#
+# distsTournament('italy', ids_A, regtime=True, save=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italy_regtime.parquet')
+# distsTournament('italy', ids_A, regtime=True, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italyNorm_regtime.parquet')
+#
+# distsTournament('italy', ids_A, end=39, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italyNorm_before_goal.parquet')
+# distsTournament('italy', ids_A, begin=39, end=45, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italyNorm_after_goal_imm.parquet')
+#
+#
+# distsTournament('italy', ids_A, end=55, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italyNorm_before_red.parquet')
+# distsTournament('italy', ids_A, begin=55, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/italyNorm_after_red.parquet')
+#
+#
+# print(distsTournament('wales', ids_B, save=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/wales.parquet'))
+# distsTournament('wales', ids_B, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/walesNorm.parquet')
+#
+# distsTournament('wales', ids_B, first=True, save=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/wales_1st.parquet')
+# distsTournament('wales', ids_B, first=True, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/walesNorm_1st.parquet')
+#
+# distsTournament('wales', ids_B, second=True, save=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/wales_2nd.parquet')
+# distsTournament('wales', ids_B, second=True, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/walesNorm_2nd.parquet')
+#
+# distsTournament('wales', ids_B, regtime=True, save=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/wales_regtime.parquet')
+# distsTournament('wales', ids_B, regtime=True, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/walesNorm_regtime.parquet')
+#
+# distsTournament('wales', ids_B, end=39, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/walesNorm_before_goal.parquet')
+# distsTournament('wales', ids_B, begin=39, end=45, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/walesNorm_after_goal_imm.parquet')
+#
+#
+# distsTournament('wales', ids_B, end=55, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/walesNorm_before_red.parquet')
+# distsTournament('wales', ids_B, begin=55, save=True, norm=True, path='/home/igor/PycharmProjects/socceranalytics/newDists/walesNorm_after_red.parquet')
+#
